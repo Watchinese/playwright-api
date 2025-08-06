@@ -16,8 +16,15 @@ app.post('/scrape', async (req, res) => {
 
   console.log("Visiting:", url);
 
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const browser = await chromium.launch({
+    headless: false, // 非 headless 模式，有助於繞過 Cloudflare
+    slowMo: 50, // 放慢操作，模擬人類行為
+  });
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.117 Safari/537.36',
+  });
   const page = await context.newPage();
 
   try {

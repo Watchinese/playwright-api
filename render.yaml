@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: playwright-api
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: API_TOKEN
+        value: your_secure_token

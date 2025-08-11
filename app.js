@@ -1,48 +1,91 @@
-import express from 'express';
-import { chromium } from 'playwright';
+import express from "express";
+import { chromium } from "playwright";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
+const API_TOKEN = process.env.API_TOKEN || "";
 const PORT = process.env.PORT || 10000;
-const API_TOKEN = process.env.API_TOKEN;
 
-app.post('/scrape', async (req, res) => {
+app.post("/scrape", async (req, res) => {
   const { url, token, selectors } = req.body;
 
-  if (token !== API_TOKEN) {
-    return res.status(403).json({ error: 'Unauthorized' });
+  if (!token || token !== API_TOKEN) {
+    return res.status(403).json({ error: "Invalid or missing API token" });
+  }
+  if (!url || !selectors) {
+    return res.status(400).json({ error: "Missing url or selectors" });
   }
 
-  console.log("Visiting:", url);
+  console.log(`Visiting: ${url}`);
 
-  const browser = await chromium.launch({
-    headless: true,
-    slowMo: 150, // 放慢操作，模擬人類行為
-  });
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.117 Safari/537.36',
-  });
-  const page = await context.newPage();
-
+  let browser;
   try {
-    await page.goto(url, { timeout: 120000, waitUntil: 'domcontentloaded' });
+    browser = await chromium.launch({
+      headless: true, // change to false for visual debugging
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled",
+      ],
+    });
 
-    const result = {};
-    for (const [key, selector] of Object.entries(selectors || {})) {
-      result[key] = await page.$$eval(selector, els =>
-        els.map(el => el.innerText.trim()).join('\n\n')
-      );
+    const context = await browser.newContext({
+      userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      viewport: { width: 1366, height: 768 },
+    });
+
+    const page = await context.newPage();
+
+    // DEBUG LOGS
+    page.on("console", (msg) => console.log("PAGE LOG:", msg.text()));
+    page.on("request", (req) =>
+        console.log("REQ:", req.method(), req.url())
+    );
+    page.on("response", (res2) =>
+        console.log("RES:", res2.status(), res2.url())
+    );
+
+    // Skip heavy resources
+    await page.route("**/*", (route) => {
+      const type = route.request().resourceType();
+      if (["image", "stylesheet", "font", "media"].includes(type)) {
+        return route.abort();
+      }
+      route.continue();
+    });
+
+    // Go to page, don't wait forever
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000, // fail after 30s
+    });
+
+    // Wait for title
+    const titleHandle = await page.waitForSelector(selectors.title, {
+      timeout: 10000,
+    });
+    const title = await titleHandle.innerText();
+
+    // Wait for body paragraphs
+    const bodyNodes = await page.$$(selectors.body);
+    const body = [];
+    for (let node of bodyNodes) {
+      body.push((await node.innerText()).trim());
     }
 
-    await browser.close();
-    res.json(result);
-  } catch (error) {
-    await browser.close();
-    console.error("Scraping failed:", error);
-    res.status(500).json({ error: error.toString() });
+    res.json({ title, body });
+  } catch (err) {
+    console.error("Scraping failed:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 });
 

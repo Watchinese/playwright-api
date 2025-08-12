@@ -26,7 +26,7 @@ app.post('/scrape', async (req, res) => {
   console.log('Visiting:', url);
 
   const browser = await chromium.launch({
-    headless: false, // HEADFUL MODE for debug
+    headless: true, // HEADFUL MODE for debug
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 

@@ -42,7 +42,18 @@ app.post('/scrape', async (req, res) => {
   let browser;
   try {
     console.log("🖥 Launching browser (headless mode)...");
-    browser = await playwright.chromium.launch({ headless: true });
+    browser = await playwright.chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-background-networking'
+      ]
+    });
 
     console.log("📄 Creating new page...");
     const page = await browser.newPage();

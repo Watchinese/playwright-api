@@ -28,21 +28,21 @@ app.post('/scrape', async (req, res) => {
     console.log('Chromium path:', chromium.executablePath());
 
     // Launch browser
+    console.log("🖥 Launching browser...");
     const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage'
-      ]
+      headless: true, // 非 headless 模式，有助於繞過 Cloudflare
+      slowMo: 100, // 放慢操作，模擬人類行為
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
-
-    // Log browser version
-    const version = await browser.version();
-    console.log('Chromium version:', version);
-
-    console.log(`📄 Creating new page...`);
+    console.log("✅ Browser launched");
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.117 Safari/537.36',
+    });
+    console.log("📄 Creating new page...");
     const page = await browser.newPage();
+    console.log("✅ New page created");
 
     console.log(`🌐 Navigating to: ${url}`);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });

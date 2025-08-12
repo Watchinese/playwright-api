@@ -31,8 +31,8 @@ app.post('/scrape', async (req, res) => {
     console.log("🖥 Launching browser...");
     const browser = await chromium.launch({
       headless: true, // 非 headless 模式，有助於繞過 Cloudflare
-      slowMo: 100, // 放慢操作，模擬人類行為
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+ //     slowMo: 100, // 放慢操作，模擬人類行為
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer']
     });
     console.log("✅ Browser launched");
     const context = await browser.newContext({

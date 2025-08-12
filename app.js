@@ -30,7 +30,11 @@ app.post('/scrape', async (req, res) => {
     // Launch browser
     const browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage'
+      ]
     });
 
     // Log browser version

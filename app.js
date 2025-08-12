@@ -2,68 +2,74 @@ import express from 'express';
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-const API_TOKEN = process.env.API_TOKEN || 'changeme';
-const DEBUG_DIR = '/app/debug';
-fs.mkdirSync(DEBUG_DIR, { recursive: true });
+// Ensure debug folder exists
+const debugDir = '/app/debug';
+if (!fs.existsSync(debugDir)) {
+  fs.mkdirSync(debugDir, { recursive: true });
+}
 
 app.post('/scrape', async (req, res) => {
   const { url, token, selectors } = req.body;
+  const API_TOKEN = process.env.API_TOKEN;
 
   if (token !== API_TOKEN) {
     return res.status(403).json({ error: 'Invalid API token' });
   }
-  if (!url || !selectors) {
-    return res.status(400).json({ error: 'Missing url or selectors' });
-  }
 
-  console.log(`Visiting: ${url}`);
+  console.log('Visiting:', url);
 
   const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    headless: false, // HEADFUL MODE for debug
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
+
   const page = await browser.newPage();
 
-  try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 180000 });
+  // Log all console messages from the page
+  page.on('console', (msg) => console.log('BROWSER LOG:', msg.text()));
 
-    // Wait for title selector
-    await page.waitForSelector(selectors.title, { timeout: 60000 });
+  // Log network responses
+  page.on('response', (res) =>
+      console.log(`RESPONSE: ${res.status()} ${res.url()}`)
+  );
+
+  try {
+    await page.goto(url, { timeout: 60000, waitUntil: 'domcontentloaded' });
+
+    // Save screenshot and HTML for debugging
+    const screenshotPath = path.join(debugDir, 'page.png');
+    const htmlPath = path.join(debugDir, 'page.html');
+
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    fs.writeFileSync(htmlPath, await page.content());
+
+    console.log(`Saved screenshot to ${screenshotPath}`);
+    console.log(`Saved HTML to ${htmlPath}`);
 
     const result = {};
-    for (const [key, sel] of Object.entries(selectors)) {
-      result[key] = await page.$$eval(sel, els => els.map(e => e.innerText.trim()).join('\n'));
+    for (const [key, selector] of Object.entries(selectors || {})) {
+      const elements = await page.$$eval(selector, (els) =>
+          els.map((el) => el.innerText.trim())
+      );
+      result[key] = elements.join('\n');
     }
 
     await browser.close();
-    return res.json(result);
-
+    res.json(result);
   } catch (err) {
-    console.error(`Error scraping ${url}:`, err);
-
-    // Save screenshot & HTML for debugging
-    const safeName = url.replace(/[^a-z0-9]/gi, '_').slice(0, 50);
-    const screenshotPath = path.join(DEBUG_DIR, `${safeName}.png`);
-    const htmlPath = path.join(DEBUG_DIR, `${safeName}.html`);
-
-    try {
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      const html = await page.content();
-      fs.writeFileSync(htmlPath, html, 'utf8');
-      console.log(`Debug files saved: ${screenshotPath}, ${htmlPath}`);
-    } catch (fsErr) {
-      console.error('Error saving debug files:', fsErr);
-    }
-
-    await browser.close();
-    return res.status(500).json({ error: err.message });
+    console.error('Scraping failed:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(10000, () => {
-  console.log('Playwright API service listening on port 10000');
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Playwright API service listening on port ${PORT}`);
 });
